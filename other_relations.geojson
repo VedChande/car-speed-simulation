@@ -1,0 +1,8 @@
+{
+"type": "FeatureCollection",
+"name": "other_relations",
+"features": [
+{ "type": "Feature", "properties": { "osm_id": "16131087", "name": "Cardinal Gracias School", "type": "public_transport", "other_tags": "\"name:en\"=>\"Cardinal Gracias School\",\"public_transport\"=>\"stop_area\"" }, "geometry": { "type": "GeometryCollection", "geometries": [ { "type": "Point", "coordinates": [ 72.8467465, 19.0682353 ] } ] } },
+{ "type": "Feature", "properties": { "osm_id": "18588645", "name": "Bandra Terminals", "type": "public_transport", "other_tags": "\"name:en\"=>\"Bandra Terminals\",\"name:mr\"=>\"वांद्रे टर्मिनस\",\"public_transport\"=>\"stop_area\"" }, "geometry": { "type": "Polygon", "coordinates": [ [ [ 72.8420198, 19.0645702 ], [ 72.8420993, 19.0646037 ], [ 72.8421304, 19.0646805 ], [ 72.842095, 19.0647556 ], [ 72.8420137, 19.0647851 ], [ 72.8416258, 19.0649999 ], [ 72.8415577, 19.0650492 ], [ 72.8414727, 19.0650386 ], [ 72.8414206, 19.0649743 ], [ 72.8414318, 19.0648939 ], [ 72.8414379, 19.0644671 ], [ 72.8414262, 19.0643878 ], [ 72.8414773, 19.0643239 ], [ 72.8415612, 19.0643128 ], [ 72.8416288, 19.0643611 ], [ 72.8420198, 19.0645702 ] ] ] } }
+]
+}
