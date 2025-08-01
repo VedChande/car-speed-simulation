@@ -2,57 +2,41 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Leaflet Routing Machine Car Simulation - Road Following</title>
+  <title>Leaflet Routing Machine Car Simulation – Lightning McQueen Icon</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link
-    rel="stylesheet"
-    href="https://unpkg.com/leaflet/dist/leaflet.css"
-  />
-  <link
-    rel="stylesheet"
-    href="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.css"
-  />
+  
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+  <!-- Leaflet Routing Machine CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.css" />
+
   <style>
-    html,
-    body {
-      height: 100%;
-      margin: 0;
-      padding: 0;
-    }
-
-    #map {
-      height: 100vh;
-      width: 100vw;
-    }
-
+    html, body { height: 100%; margin: 0; padding: 0; }
+    #map { height: 100vh; width: 100vw; }
     #info {
       position: absolute;
-      top: 10px;
-      left: 10px;
+      top: 10px; left: 10px;
       z-index: 1100;
       background: white;
       padding: 12px 16px;
       border-radius: 8px;
-      box-shadow: 0 0 10px rgba(0, 0, 0, 0.25);
+      box-shadow: 0 0 10px rgba(0,0,0,0.25);
       font-family: Arial, sans-serif;
       font-size: 15px;
       max-width: 320px;
       user-select: none;
     }
-
     #controls {
       position: absolute;
-      top: 10px;
-      right: 10px;
+      top: 10px; right: 10px;
       z-index: 1100;
       background: white;
       padding: 8px 12px;
       border-radius: 8px;
-      box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+      box-shadow: 0 0 10px rgba(0,0,0,0.3);
       font-family: Arial, sans-serif;
       user-select: none;
     }
-
     button {
       font-size: 14px;
       margin: 5px;
@@ -62,7 +46,6 @@
       border-radius: 5px;
       background: #eee;
     }
-
     button:disabled {
       opacity: 0.5;
       cursor: not-allowed;
@@ -70,153 +53,151 @@
   </style>
 </head>
 <body>
-  <div id="map"></div>
-  <div id="info">Waiting for route and start.</div>
-  <div id="controls">
-    <button id="startBtn" disabled>Start Animation</button>
-  </div>
 
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-  <script src="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.js"></script>
+<div id="map"></div>
+<div id="info">Waiting for route and start.</div>
+<div id="controls">
+  <button id="startBtn" disabled>Start Animation</button>
+</div>
 
-  <script>
-    // Initialize map
-    var map = L.map("map").setView([19.063, 72.846], 15);
+<!-- Leaflet and Routing Machine scripts -->
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.js"></script>
 
-    // Add OSM base layer
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      maxZoom: 19,
-      attribution: "&copy; OpenStreetMap contributors",
-    }).addTo(map);
+<script>
+  // Initialize map centered near your area
+  var map = L.map("map").setView([19.063, 72.846], 15);
 
-    // School location and marker
-    var schoolLatLng = [19.063607719563397, 72.8462002686538];
-    var schoolMarker = L.circleMarker(schoolLatLng, {
-      radius: 10,
-      color: "red",
-      fillColor: "#f88",
-      fillOpacity: 0.9,
-    })
-      .addTo(map)
-      .bindPopup("School");
+  // Add OpenStreetMap tiles
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution: "&copy; OpenStreetMap contributors",
+  }).addTo(map);
 
-    // UI elements
-    var infoDiv = document.getElementById("info");
-    var startBtn = document.getElementById("startBtn");
+  // School location marker
+  var schoolLatLng = [19.063607719563397, 72.8462002686538];
+  var schoolMarker = L.circleMarker(schoolLatLng, {
+    radius: 10,
+    color: "red",
+    fillColor: "#f88",
+    fillOpacity: 0.9,
+  })
+    .addTo(map)
+    .bindPopup("School");
 
-    // Variables for animation
-    var routingControl;
-    var routeCoordinates = [];
-    var carMarker = null;
-    var animationIndex = 0;
-    var animationRunning = false;
+  var infoDiv = document.getElementById("info");
+  var startBtn = document.getElementById("startBtn");
 
-    const SPEED_NORMAL = 100; // km/h
-    const SPEED_SCHOOL = 20; // km/h
-    const STEP_DISTANCE = 5; // meters between animation steps
+  var routingControl;
+  var routeCoordinates = [];
+  var carMarker = null;
+  var animationIndex = 0;
+  var animationRunning = false;
 
-    // Create routing control, but do not add to map (we add it manually)
-    routingControl = L.Routing.control({
-      waypoints: [
-        L.latLng(19.06098409033655, 72.84450074043295), // Start
-        L.latLng(19.066607637929415, 72.84632342144964), // End
-      ],
-      createMarker: () => null, // Don't create default markers
-      addWaypoints: false,
-      routeWhileDragging: false,
-      showAlternatives: false,
-      fitSelectedRoutes: true,
-      show: false,
-    }).addTo(map);
+  const SPEED_NORMAL = 100; // km/h
+  const SPEED_SCHOOL = 20; // km/h
+  const STEP_DISTANCE = 5; // meters between animation steps
 
-    // When route is found, get the coordinates
-    routingControl.on("routesfound", function(e) {
-      // Extract array of latLng for the first route
-      var route = e.routes[0];
-      routeCoordinates = route.coordinates;
+  // Initialize routing control with your start and end points
+  routingControl = L.Routing.control({
+    waypoints: [
+      L.latLng(19.06098409033655, 72.84450074043295), // Start
+      L.latLng(19.066607637929415, 72.84632342144964), // End
+    ],
+    createMarker: () => null, // Hide default markers
+    addWaypoints: false,
+    routeWhileDragging: false,
+    showAlternatives: false,
+    fitSelectedRoutes: true,
+    show: false,
+  }).addTo(map);
 
-      infoDiv.innerHTML = `<b>Route ready with ${routeCoordinates.length} points.</b><br>Click 'Start Animation' to begin.`;
-      startBtn.disabled = false;
-    });
+  // Event: when route found, store coordinates and enable start button
+  routingControl.on("routesfound", function(e) {
+    var route = e.routes[0];
+    routeCoordinates = route.coordinates;
+    infoDiv.innerHTML = `<b>Route ready with ${routeCoordinates.length} points.</b><br>Click 'Start Animation' to begin.`;
+    startBtn.disabled = false;
+  });
 
-    routingControl.on("routingerror", function(e) {
-      infoDiv.innerHTML = `<b>Routing error occurred. Please check your inputs or try again later.</b>`;
-      startBtn.disabled = true;
-    });
+  // Event: routing error
+  routingControl.on("routingerror", function(e) {
+    infoDiv.innerHTML = `<b>Routing error occurred. Please try again later.</b>`;
+    startBtn.disabled = true;
+  });
 
-    // Car icon
-    var carIcon = L.icon({
-      iconUrl: "https://cdn-icons-png.flaticon.com/512/1783/1783337.png",
-      iconSize: [32, 32],
-      iconAnchor: [16, 16],
-    });
+  // Lightning McQueen car icon
+  var carIcon = L.icon({
+    iconUrl: "https://w7.pngwing.com/pngs/976/903/png-transparent-lightning-mcqueen-illustration-cars-lightning-mcqueen-playstation-2-gamecube-pixar-cars-game-car-video-game-thumbnail.png",
+    iconSize: [40, 30],      // Adjust size as needed
+    iconAnchor: [20, 15],    // Anchor in the center
+  });
 
-    // Start button click handler
-    startBtn.addEventListener("click", () => {
-      if (animationRunning) return;
+  // Start animation when button clicked
+  startBtn.addEventListener("click", () => {
+    if (animationRunning) return;
 
-      if (carMarker) {
-        map.removeLayer(carMarker);
-      }
-      animationIndex = 0;
-      carMarker = L.marker(routeCoordinates[0], { icon: carIcon }).addTo(map);
-      map.panTo(routeCoordinates[0]);
-      animationRunning = true;
-      startBtn.disabled = true;
-      animateCar();
-    });
-
-    // Animate the car along the routed path
-    function animateCar() {
-      if (!animationRunning) return;
-
-      if (animationIndex >= routeCoordinates.length - 1) {
-        infoDiv.innerHTML += "<br><b>Route completed.</b>";
-        animationRunning = false;
-        startBtn.disabled = false;
-        return;
-      }
-
-      var pos = carMarker.getLatLng();
-      var next = routeCoordinates[animationIndex + 1];
-      var nextLatLng = L.latLng(next.lat, next.lng);
-
-      var distanceToNext = pos.distanceTo(nextLatLng);
-      var fraction = Math.min(STEP_DISTANCE / distanceToNext, 1);
-
-      var newLat =
-        pos.lat + (nextLatLng.lat - pos.lat) * fraction;
-      var newLng =
-        pos.lng + (nextLatLng.lng - pos.lng) * fraction;
-      var newPos = L.latLng(newLat, newLng);
-
-      // Calculate distance to school
-      var schoolPoint = L.latLng(schoolLatLng[0], schoolLatLng[1]);
-      var distToSchool = newPos.distanceTo(schoolPoint);
-      var inSchoolZone = distToSchool < 100;
-      var currentSpeed = inSchoolZone ? SPEED_SCHOOL : SPEED_NORMAL;
-
-      infoDiv.innerHTML =
-        `<b>Position:</b> ${newLat.toFixed(6)}, ${newLng.toFixed(6)}<br>` +
-        `<b>Speed Limit:</b> ${currentSpeed} km/h<br>` +
-        `<b>Status:</b> ${
-          inSchoolZone
-            ? '<span style="color:red;">In School Zone</span>'
-            : "Normal Area"
-        }<br>` +
-        `<b>Distance to school:</b> ${Math.round(distToSchool)} m`;
-
-      carMarker.setLatLng(newPos);
-      map.panTo(newPos);
-
-      if (fraction === 1) {
-        animationIndex++;
-      }
-
-      // Speed simulated by timeout delay (slower inside school zone)
-      var delay = inSchoolZone ? 300 : 80;
-      setTimeout(animateCar, delay);
+    if (carMarker) {
+      map.removeLayer(carMarker);
     }
-  </script>
+    animationIndex = 0;
+    carMarker = L.marker(routeCoordinates[0], { icon: carIcon }).addTo(map);
+    map.panTo(routeCoordinates[0]);
+    animationRunning = true;
+    startBtn.disabled = true;
+    animateCar();
+  });
+
+  // Animate car along routeCoordinates with school zone slowdown
+  function animateCar() {
+    if (!animationRunning) return;
+
+    if (animationIndex >= routeCoordinates.length - 1) {
+      infoDiv.innerHTML += "<br><b>Route completed.</b>";
+      animationRunning = false;
+      startBtn.disabled = false;
+      return;
+    }
+
+    var pos = carMarker.getLatLng();
+    var next = routeCoordinates[animationIndex + 1];
+    var nextLatLng = L.latLng(next.lat, next.lng);
+
+    var distanceToNext = pos.distanceTo(nextLatLng);
+    var fraction = Math.min(STEP_DISTANCE / distanceToNext, 1);
+
+    var newLat = pos.lat + (nextLatLng.lat - pos.lat) * fraction;
+    var newLng = pos.lng + (nextLatLng.lng - pos.lng) * fraction;
+    var newPos = L.latLng(newLat, newLng);
+
+    // Calculate distance to school
+    var schoolPoint = L.latLng(schoolLatLng[0], schoolLatLng[1]);
+    var distToSchool = newPos.distanceTo(schoolPoint);
+    var inSchoolZone = distToSchool < 100;
+    var currentSpeed = inSchoolZone ? SPEED_SCHOOL : SPEED_NORMAL;
+
+    infoDiv.innerHTML =
+      `<b>Position:</b> ${newLat.toFixed(6)}, ${newLng.toFixed(6)}<br>` +
+      `<b>Speed Limit:</b> ${currentSpeed} km/h<br>` +
+      `<b>Status:</b> ${
+        inSchoolZone
+          ? '<span style="color:red;">In School Zone</span>'
+          : "Normal Area"
+      }<br>` +
+      `<b>Distance to school:</b> ${Math.round(distToSchool)} m`;
+
+    carMarker.setLatLng(newPos);
+    map.panTo(newPos);
+
+    if (fraction === 1) {
+      animationIndex++;
+    }
+
+    // Animation delay: slower inside school zone
+    var delay = inSchoolZone ? 300 : 80;
+    setTimeout(animateCar, delay);
+  }
+</script>
+
 </body>
 </html>
