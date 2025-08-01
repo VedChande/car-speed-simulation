@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Leaflet Car Speed Simulation - Single School Zone</title>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Leaflet Car Speed Simulation – Direct Route Example</title>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
   <style>
     html, body { height: 100%; margin: 0; padding: 0; }
@@ -18,7 +18,7 @@
       box-shadow: 0 0 8px rgba(0,0,0,0.25);
       font-family: Arial, sans-serif;
       font-size: 15px;
-      max-width: 260px;
+      max-width: 280px;
     }
   </style>
 </head>
@@ -27,10 +27,9 @@
   <div id="info"><b>Loading map and route...</b></div>
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script>
-    // Map centered near your school
-    var map = L.map('map').setView([19.063, 72.846], 15);
+    // Center on the midpoint between start/end
+    var map = L.map('map').setView([19.0638, 72.8454], 16);
 
-    // OSM base layer
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
       attribution: '&copy; OpenStreetMap contributors'
@@ -38,7 +37,7 @@
 
     var infoDiv = document.getElementById('info');
 
-    // Only your chosen school, marked as a prominent red circle
+    // Only your specified school
     var schoolLatLng = [19.063607719563397, 72.8462002686538];
     var schoolMarker = L.circleMarker(schoolLatLng, {
       radius: 10,
@@ -47,10 +46,12 @@
       fillOpacity: 0.98
     }).addTo(map).bindPopup('School');
 
-    // For school zone detection
     var schoolPoint = L.latLng(schoolLatLng[0], schoolLatLng[1]);
 
-    // Optionally, add extra visual layers (fillable if you want)
+    // Optional: Show your lines.geojson/multilinestrings/multipolygons
+    fetch('lines.geojson').then(r=>r.json()).then(g=>{
+      L.geoJSON(g, { color: 'blue' }).addTo(map);
+    });
     fetch('multilinestrings.geojson').then(r=>r.json()).then(g=>{
       L.geoJSON(g, { style: { color: 'orange', dashArray: '5 9' }}).addTo(map);
     });
@@ -58,35 +59,20 @@
       L.geoJSON(g, { style: { color: 'green', fillColor: '#7f7', fillOpacity: 0.18 }}).addTo(map);
     });
 
-    // Get route coordinates from lines.geojson (first LineString, 4 points minimum)
-    var routeCoords = [];
-    fetch('lines.geojson')
-      .then(res => res.json())
-      .then(data => {
-        L.geoJSON(data, { color: 'blue' }).addTo(map);
+    // Define a direct route for the car (straight line from start to end, with intermediate points for smooth animation)
+    var routeCoords = [
+      [19.06098409033655, 72.84450074043295],    // Start
+      [19.0619817, 72.8448237],
+      [19.06296, 72.845164],
+      [19.063607719563397, 72.8462002686538],    // Near school
+      [19.06496, 72.845764],
+      [19.06578, 72.84601],
+      [19.066607637929415, 72.84632342144964]    // End
+    ];
 
-        let found = false;
-        for (let feature of data.features) {
-          if (feature.geometry.type === 'LineString' && feature.geometry.coordinates.length >= 4) {
-            routeCoords = feature.geometry.coordinates.slice(0, 4).map(pt => [pt[1], pt[0]]);
-            found = true;
-            break;
-          }
-        }
-        if(!found) { // fallback route if no data
-          routeCoords = [
-            [19.062, 72.844],
-            [19.063, 72.846],
-            [19.064, 72.848],
-            [19.065, 72.850]
-          ];
-        }
-        startCarAnimation(routeCoords);
-        infoDiv.innerHTML = 'Simulation started!';
-      })
-      .catch(() => { infoDiv.innerHTML = 'Could not load lines.geojson.'; });
+    // Start the car animation
+    startCarAnimation(routeCoords);
 
-    // Animate the car
     function startCarAnimation(route) {
       var carIcon = L.icon({
         iconUrl: 'https://cdn-icons-png.flaticon.com/512/1783/1783337.png',
@@ -97,7 +83,7 @@
       var idx = 0;
       var SPEED_NORMAL = 100;
       var SPEED_SCHOOL = 20;
-      var stepDistM = 5;
+      var stepDistM = 3; // Meters per step. Lower: smoother, higher: faster.
       var currentSpeed = SPEED_NORMAL;
 
       function animateStep() {
@@ -114,7 +100,7 @@
         var lng = pos.lng + (next.lng - pos.lng) * frac;
         var newPos = L.latLng(lat, lng);
 
-        // Only your school for zone logic
+        // Distance to the school
         var distToSchool = newPos.distanceTo(schoolPoint);
         var inSchoolZone = distToSchool < 100;
         currentSpeed = inSchoolZone ? SPEED_SCHOOL : SPEED_NORMAL;
@@ -129,7 +115,7 @@
         map.panTo(newPos);
 
         if (frac === 1) idx++;
-        setTimeout(animateStep, inSchoolZone ? 300 : 80); // slower in zone, faster outside
+        setTimeout(animateStep, inSchoolZone ? 300 : 75); // slow down inside zone
       }
       animateStep();
     }
