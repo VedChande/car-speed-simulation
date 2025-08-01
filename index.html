@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Free OSM Car Simulation</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+  <style>
+    #map { height: 90vh; width: 100vw; }
+    #info { position: absolute; top: 10px; left: 10px; z-index: 1000; background: #fff; padding: 8px; border-radius: 8px; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div id="info"><b>Loading...</b></div>
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script>
+    var map = L.map('map').setView([28.6, 77.2], 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+      maxZoom: 19
+    }).addTo(map);
+
+    // Show Indian map first
+    var infoDiv = document.getElementById('info');
+
+    // Load and show roads
+    fetch('lines.geojson')
+      .then(res => res.json())
+      .then(geojson => {
+        L.geoJSON(geojson, {color: 'blue'}).addTo(map);
+
+        // Pick route coordinates from your roads (first 10 points for demo)
+        let coords = [];
+        geojson.features.forEach(f=>{
+          if(f.geometry.type === "LineString"){
+            coords = coords.concat(f.geometry.coordinates.slice(0,4)); // use 4 points for short demo
+          }
+        });
+        if(coords.length<2){
+          coords = [[77.2,28.6],[77.21,28.61],[77.22,28.62],[77.23,28.63]];
+        }
+        animateCar(coords.map(pt=>[pt[1],pt[0]])); // Leaflet uses [lat,lng]
+      });
+
+    // Load school points
+    let schoolPoints = [];
+    fetch('points.geojson')
+      .then(res => res.json())
+      .then(geojson => {
+        L.geoJSON(geojson, {
+          pointToLayer: function(feature, latlng) {
+            // If OSM "amenity" tag is "school", mark as red
+            let isSchool = feature.properties && feature.properties.amenity === "school";
+            if(isSchool){
+              schoolPoints.push(latlng);
+              return L.circleMarker(latlng,{radius:8, color:'red', fillColor:'#f88', fillOpacity:0.8});
+            }
+            return L.circleMarker(latlng,{radius:5, color:'gray'});
+          }
+        }).addTo(map);
+      });
+
+    // Helper: calculate distance in meters between two [lat,lng]
+    function dist(a, b){
+      const toRad = x => x * Math.PI / 180;
+      const R = 6371000;
+      const dLat = toRad(b[0] - a[0]), dLng = toRad(b[1] - a[1]);
+      const x1 = toRad(a[0]), x2 = toRad(b[0]);
+      const aVal = Math.sin(dLat/2)**2 + Math.cos(x1)*Math.cos(x2)*Math.sin(dLng/2)**2;
+      return 2*R*Math.asin(Math.sqrt(aVal));
+    }
+
+    // Animation function
+    function animateCar(route){
+      // Place car at start
+      var carMarker = L.marker(route[0],{
+        icon: L.icon({
+          iconUrl: "https://cdn-icons-png.flaticon.com/512/1783/1783337.png",
+          iconSize: [32,32],
+          iconAnchor:[16,16]
+        })
+      }).addTo(map);
+
+      var idx = 0, SPEED_OUT=100, SPEED_SCHOOL=20, curSpeed=SPEED_OUT, stepDist=5; // meters per step
+      function nextStep(){
+        if(idx >= route.length-1) return;
+        let pos = carMarker.getLatLng();
+        let nxt = route[idx+1];
+        let segDist = dist([pos.lat,pos.lng], nxt
