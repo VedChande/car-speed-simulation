@@ -1,36 +1,50 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Leaflet Car Speed Simulation – Single School, Custom Route</title>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta charset="UTF-8" />
+  <title>Leaflet Manual Route Selection & Car Simulation</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
   <style>
-    html, body { height: 100%; margin: 0; padding: 0; }
+    html, body { margin:0; padding:0; height:100%; }
     #map { height: 100vh; width: 100vw; }
     #info {
       position: absolute;
       top: 10px; left: 10px;
       z-index: 1000;
-      background: #fff;
+      background: white;
       padding: 12px 16px;
       border-radius: 8px;
-      box-shadow: 0 0 8px rgba(0,0,0,0.25);
+      box-shadow: 0 0 10px rgba(0,0,0,0.25);
       font-family: Arial, sans-serif;
-      font-size: 15px;
-      max-width: 285px;
+      font-size: 14px;
+      max-width: 320px;
+      user-select: none;
+    }
+    #instructions {
+      position: absolute;
+      bottom: 10px; left: 10px;
+      background: white;
+      padding: 8px 12px;
+      border-radius: 8px;
+      box-shadow: 0 0 8px rgba(0,0,0,0.2);
+      font-family: Arial, sans-serif;
+      font-size: 13px;
+      max-width: 320px;
+      user-select: none;
     }
   </style>
 </head>
 <body>
   <div id="map"></div>
-  <div id="info"><b>Loading map and route...</b></div>
+  <div id="info"><b>Click on the map to add route points.</b><br>At least 2 points needed to start animation.</div>
+  <div id="instructions">Click on map to add waypoints. Car will follow path. School zone slows car near red marker.</div>
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script>
-    // Center map between start and end
-    var map = L.map('map').setView([19.063, 72.846], 16);
+    // Initialize map centered approximately near your school (adjust as needed)
+    var map = L.map('map').setView([19.063, 72.846], 15);
 
-    // Add OpenStreetMap base
+    // Add OSM tiles (no API key required)
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
       attribution: '&copy; OpenStreetMap contributors'
@@ -38,76 +52,123 @@
 
     var infoDiv = document.getElementById('info');
 
-    // Mark your one school location, and use for school zone logic
+    // Your specific school location
     var schoolLatLng = [19.063607719563397, 72.8462002686538];
-    L.circleMarker(schoolLatLng, {
+    var schoolMarker = L.circleMarker(schoolLatLng, {
       radius: 10,
       color: 'red',
       fillColor: '#f88',
-      fillOpacity: 0.98
+      fillOpacity: 0.9
     }).addTo(map).bindPopup('School');
+
     var schoolPoint = L.latLng(schoolLatLng[0], schoolLatLng[1]);
 
-    // Draw the route you specified; add more points if you want more detailed path!
-    var routeCoords = [
-      [19.06098409033655, 72.84450074043295],  // Start
-      [19.0619, 72.8448],
-      [19.0629, 72.8451],
-      [19.063607719563397, 72.8462002686538],  // Point at/near school
-      [19.0645, 72.8463],
-      [19.0657, 72.8463],
-      [19.066607637929415, 72.84632342144964]  // End
-    ];
-    L.polyline(routeCoords, { color: 'blue', weight: 4 }).addTo(map);
+    // Variables to store user-selected route points and polyline
+    var routeCoords = [];
+    var routeLine = null;
 
-    // Start the car animation
-    startCarAnimation(routeCoords);
+    // The car marker and animation control
+    var carMarker = null;
+    var animationRunning = false;
+    var animationIndex = 0;
 
-    function startCarAnimation(route) {
-      var carIcon = L.icon({
-        iconUrl: 'https://cdn-icons-png.flaticon.com/512/1783/1783337.png',
-        iconSize: [32, 32], iconAnchor: [16, 16],
-      });
-      var car = L.marker(route[0], { icon: carIcon }).addTo(map);
+    // Car icon
+    var carIcon = L.icon({
+      iconUrl: 'https://cdn-icons-png.flaticon.com/512/1783/1783337.png',
+      iconSize: [32, 32],
+      iconAnchor: [16, 16]
+    });
 
-      var idx = 0;
-      var SPEED_NORMAL = 100; // km/h
-      var SPEED_SCHOOL = 20;  // km/h
-      var stepDistM = 3; // meters per animation step
-      var currentSpeed = SPEED_NORMAL;
-
-      function animateStep() {
-        if (idx >= route.length - 1) {
-          infoDiv.innerHTML += '<br><b>Route completed.</b>';
-          return;
-        }
-        var pos = car.getLatLng();
-        var next = L.latLng(route[idx+1]);
-        var segDist = pos.distanceTo(next);
-        var frac = Math.min(stepDistM / segDist, 1);
-
-        var lat = pos.lat + (next.lat - pos.lat) * frac;
-        var lng = pos.lng + (next.lng - pos.lng) * frac;
-        var newPos = L.latLng(lat, lng);
-
-        // School zone logic
-        var distToSchool = newPos.distanceTo(schoolPoint);
-        var inSchoolZone = distToSchool < 100;
-        currentSpeed = inSchoolZone ? SPEED_SCHOOL : SPEED_NORMAL;
-
-        infoDiv.innerHTML =
-          `<b>Position:</b> ${lat.toFixed(6)}, ${lng.toFixed(6)}<br>` +
-          `<b>Speed Limit:</b> ${currentSpeed} km/h<br>` +
-          `<b>Status:</b> ${inSchoolZone ? '<span style="color:red">In School Zone</span>' : 'Normal Area'}<br>` +
-          `<b>Distance to school:</b> ${Math.round(distToSchool)} m`;
-
-        car.setLatLng(newPos);
-        map.panTo(newPos);
-
-        if (frac === 1) idx++;
-        setTimeout(animateStep, inSchoolZone ? 300 : 75);
+    // On map click: add a waypoint and redraw polyline
+    map.on('click', function(e) {
+      // If animation is running, reset to allow new route
+      if(animationRunning){
+        resetAnimation();
       }
+
+      routeCoords.push([e.latlng.lat, e.latlng.lng]);
+
+      if(routeLine) {
+        map.removeLayer(routeLine);
+      }
+      routeLine = L.polyline(routeCoords, {color: 'blue', weight: 4}).addTo(map);
+
+      infoDiv.innerHTML = 
+        `<b>Route points:</b> ${routeCoords.length}<br>` +
+        (routeCoords.length >= 2 ? 'Animation will start automatically.' : 'Add at least one more point.');
+
+      // Automatically start animation if 2+ points present
+      if(routeCoords.length >= 2){
+        startCarAnimation();
+      }
+    });
+
+    function resetAnimation() {
+      animationRunning = false;
+      animationIndex = 0;
+      if(carMarker) {
+        map.removeLayer(carMarker);
+        carMarker = null;
+      }
+    }
+
+    function startCarAnimation() {
+      if(animationRunning) return; // prevent multiple animations
+
+      animationRunning = true;
+      animationIndex = 0;
+
+      // Place car at first point
+      carMarker = L.marker(routeCoords[0], {icon: carIcon}).addTo(map);
+      map.panTo(routeCoords[0]);
+
       animateStep();
+    }
+
+    // Animation parameters
+    var SPEED_NORMAL = 100;  // km/h
+    var SPEED_SCHOOL = 20;   // km/h
+    var stepDistMeters = 5;  // meters per animation update
+
+    function animateStep() {
+      if(!animationRunning) return;
+
+      if(animationIndex >= routeCoords.length - 1){
+        infoDiv.innerHTML += '<br><b>Route completed.</b>';
+        animationRunning = false;
+        return;
+      }
+
+      var pos = carMarker.getLatLng();
+      var next = L.latLng(routeCoords[animationIndex + 1]);
+      var segDist = pos.distanceTo(next);
+      var stepFrac = Math.min(stepDistMeters / segDist, 1);
+
+      var newLat = pos.lat + (next.lat - pos.lat) * stepFrac;
+      var newLng = pos.lng + (next.lng - pos.lng) * stepFrac;
+      var newPos = L.latLng(newLat, newLng);
+
+      // Distance to school and speed control
+      var distToSchool = newPos.distanceTo(schoolPoint);
+      var inSchoolZone = distToSchool < 100;
+      var currentSpeed = inSchoolZone ? SPEED_SCHOOL : SPEED_NORMAL;
+
+      // Update info panel
+      infoDiv.innerHTML = 
+        `<b>Position:</b> ${newLat.toFixed(6)}, ${newLng.toFixed(6)}<br>` +
+        `<b>Speed Limit:</b> ${currentSpeed} km/h<br>` +
+        `<b>Status:</b> ${inSchoolZone ? '<span style="color:red;">In School Zone</span>' : 'Normal Area'}<br>` +
+        `<b>Distance to school:</b> ${Math.round(distToSchool)} m`;
+
+      // Move car marker and pan map
+      carMarker.setLatLng(newPos);
+      map.panTo(newPos);
+
+      if(stepFrac === 1) animationIndex++;
+
+      // Animation delay: slower inside school zone
+      var delay = inSchoolZone ? 300 : 80;
+      setTimeout(animateStep, delay);
     }
   </script>
 </body>
