@@ -1,125 +1,166 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>OSM Map Simulation (Named for Your Files)</title>
+  <title>Leaflet Car Speed Simulation - Specific School</title>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  
   <style>
-    #map { height: 90vh; width: 100vw; }
-    #info { position: absolute; top: 10px; left: 10px; z-index: 1000; background: #fff; padding: 8px; border-radius: 8px; }
+    body, html { margin: 0; padding: 0; height: 100%; }
+    #map { height: 100vh; width: 100vw; }
+    #info {
+      position: absolute;
+      top: 10px; left: 10px;
+      z-index: 1000;
+      background: white;
+      padding: 12px 16px;
+      border-radius: 8px;
+      box-shadow: 0 0 8px rgba(0,0,0,0.3);
+      font-family: Arial, sans-serif;
+      font-size: 14px;
+      max-width: 280px;
+    }
   </style>
 </head>
 <body>
+  
   <div id="map"></div>
-  <div id="info"><b>Loading...</b></div>
+  <div id="info"><b>Loading map and route...</b></div>
+  
+  <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  
   <script>
-    var map = L.map('map').setView([28.6, 77.2], 13);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom: 19}).addTo(map);
-
+    // Initialize map centered near your route/school location
+    var mapCenter = [19.06, 72.845]; // Adjust if needed
+    var map = L.map('map').setView(mapCenter, 14);
+    
+    // Add OpenStreetMap tiles
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+    
     var infoDiv = document.getElementById('info');
 
-    // 1. Add lines.geojson roads (blue)
-    let routeCoords = [];
+    // Mark ONLY your specific school location:
+    var schoolLatLng = [19.063607719563397, 72.8462002686538];
+    var schoolMarker = L.circleMarker(schoolLatLng, {
+      radius: 10,
+      color: 'red',
+      fillColor: '#f88',
+      fillOpacity: 0.95
+    }).addTo(map).bindPopup('School');
+
+    // For school zone detection:
+    var schoolPoint = L.latLng(schoolLatLng[0], schoolLatLng[1]);
+
+    // Helper to calculate distance in meters between points (Leaflet built-in)
+    function distanceMeters(a, b) {
+      return map.distance(a, b);
+    }
+
+    // Array to hold route coordinates (lat,lng)
+    var routeCoords = [];
+
+    // Load your lines.geojson that contains roads
     fetch('lines.geojson')
-      .then(r => r.json())
-      .then(geojson => {
-        L.geoJSON(geojson, {color: 'blue'}).addTo(map);
-        // Extract a short demo route from the first few lines
-        geojson.features.forEach(f=>{
-          if(f.geometry.type === "LineString"){
-            // Use first 4 points from the first linestring found
-            if(routeCoords.length<4) routeCoords = routeCoords.concat(f.geometry.coordinates.slice(0,4));
+      .then(res => res.json())
+      .then(data => {
+        // Add roads to map in blue
+        L.geoJSON(data, { color: 'blue' }).addTo(map);
+
+        // Extract first 4 points from first suitable LineString feature for route
+        var foundRoute = false;
+        for(let feature of data.features){
+          if(feature.geometry.type === 'LineString' && feature.geometry.coordinates.length >= 4){
+            // GeoJSON coordinates are [lng, lat], convert to [lat, lng] for Leaflet
+            routeCoords = feature.geometry.coordinates.slice(0, 4).map(coord => [coord[1], coord[0]]);
+            foundRoute = true;
+            break;
           }
-        });
-        if(routeCoords.length<2) routeCoords = [[77.2,28.6],[77.21,28.61],[77.23,28.62],[77.25,28.65]];
-        animateCar(routeCoords.map(pt=>[pt[1],pt[0]])); // [lat, lng]
-      });
-
-    // 2. Add multilinestrings.geojson (dashed orange, for complex roads)
-    fetch('multilinestrings.geojson')
-      .then(r => r.json())
-      .then(geojson => {
-        L.geoJSON(geojson, {
-          style: {color:'orange', dashArray:'4'}
-        }).addTo(map);
-      });
-
-    // 3. Add multipolygons.geojson (green fill, e.g., parks or large zones)
-    fetch('multipolygons.geojson')
-      .then(r => r.json())
-      .then(geojson => {
-        L.geoJSON(geojson, {
-          style:{color:'green', fillColor:'#7f7', fillOpacity:0.2}
-        }).addTo(map);
-      });
-
-    // 4. Add points.geojson (red for schools or POIs)
-    let poiPoints = [];
-    fetch('points.geojson')
-      .then(r => r.json())
-      .then(geojson => {
-        L.geoJSON(geojson, {
-          pointToLayer: function(f,latlng){
-            // Mark all as POI; if type is "school", remember for school zone check
-            let color = 'red';
-            if(f.properties && f.properties.amenity==="school") poiPoints.push(latlng);
-            else poiPoints.push(latlng); // Mark all for demo; edit this for actual filtering.
-            return L.circleMarker(latlng,{radius:7, color:color, fillColor:'#f88', fillOpacity:0.8});
-          }
-        }).addTo(map);
-      });
-
-    // Distance helper
-    function dist(a, b){
-      const toRad = x => x * Math.PI / 180, R = 6371000;
-      const dLat=toRad(b[0]-a[0]), dLng=toRad(b[1]-a[1]), x1=toRad(a[0]), x2=toRad(b[0]);
-      const aVal = Math.sin(dLat/2)**2 + Math.cos(x1)*Math.cos(x2)*Math.sin(dLng/2)**2;
-      return 2*R*Math.asin(Math.sqrt(aVal));
-    }
-
-    // Car animation
-    function animateCar(route){
-      var carMarker = L.marker(route[0],{
-        icon: L.icon({
-          iconUrl: "https://cdn-icons-png.flaticon.com/512/1783/1783337.png",
-          iconSize: [32,32], iconAnchor:[16,16]
-        })
-      }).addTo(map);
-
-      var idx = 0, SPEED_OUT=100, SPEED_SCHOOL=20, curSpeed=SPEED_OUT, stepDist=5;
-      function nextStep(){
-        if(idx >= route.length-1) return;
-        let pos = carMarker.getLatLng();
-        let nxt = route[idx+1];
-        let segDist = dist([pos.lat,pos.lng], nxt);
-        let moveFrac = Math.min(stepDist/segDist,1);
-        let lat = pos.lat + (nxt[0]-pos.lat)*moveFrac;
-        let lng = pos.lng + (nxt[1]-pos.lng)*moveFrac;
-        let here = [lat,lng];
-
-        // Find distance to any POI (demo: treat all points as schools; customize as needed)
-        let minDist = 9999;
-        for(let k=0;k<poiPoints.length;k++){
-          let d = dist(here, [poiPoints[k].lat, poiPoints[k].lng]);
-          if(d<minDist) minDist=d;
         }
-        let inSchoolZone = minDist<100; // 100m school zone
-        curSpeed = inSchoolZone ? SPEED_SCHOOL : SPEED_OUT;
+        if(!foundRoute) {
+          // Fallback route if lines.geojson is empty or no LineString found
+          routeCoords = [
+            [19.06, 72.84], 
+            [19.061, 72.842], 
+            [19.062, 72.844], 
+            [19.063, 72.846]
+          ];
+        }
 
-        infoDiv.innerHTML = `<b>Position:</b> ${lat.toFixed(5)}, ${lng.toFixed(5)}<br>
-          <b>Speed Limit:</b> ${curSpeed} km/h<br>
-          <b>${inSchoolZone?'In <span style="color:red">School Zone</span>':'Normal Zone'}</b><br>
-          <b>Distance to nearest POI:</b> ${Math.floor(minDist)} m`;
+        startCarAnimation(routeCoords);
+        infoDiv.innerHTML = 'Simulation started!';
+      })
+      .catch(() => {
+        infoDiv.innerHTML = 'Failed to load lines.geojson.';
+      });
 
-        carMarker.setLatLng(here);
-        map.panTo(here);
-        if(moveFrac===1) idx++;
-        setTimeout(nextStep, inSchoolZone?300:80);
+    // Car animation along route
+    function startCarAnimation(route) {
+      var carIcon = L.icon({
+        iconUrl: 'https://cdn-icons-png.flaticon.com/512/1783/1783337.png',
+        iconSize: [32, 32],
+        iconAnchor: [16, 16],
+      });
+
+      var carMarker = L.marker(route[0], { icon: carIcon }).addTo(map);
+
+      var idx = 0;
+      var SPEED_OUT = 100;      // km/h outside school
+      var SPEED_SCHOOL = 20;    // km/h inside school zone
+      var currentSpeed = SPEED_OUT;
+      var stepDistanceMeters = 5; // movement per interval in meters
+
+      function animateStep() {
+        if (idx >= route.length - 1) {
+          infoDiv.innerHTML += '<br><b>Route completed.</b>';
+          return;
+        }
+
+        var pos = carMarker.getLatLng();
+        var next = L.latLng(route[idx + 1]);
+
+        var distToNext = pos.distanceTo(next);
+        var moveFraction = Math.min(stepDistanceMeters / distToNext, 1);
+
+        var lat = pos.lat + (next.lat - pos.lat) * moveFraction;
+        var lng = pos.lng + (next.lng - pos.lng) * moveFraction;
+        var newPos = L.latLng(lat, lng);
+
+        // Distance to the school location
+        var distToSchool = newPos.distanceTo(schoolPoint);
+        var inSchoolZone = distToSchool <= 100; // 100 meters radius
+
+        currentSpeed = inSchoolZone ? SPEED_SCHOOL : SPEED_OUT;
+
+        // Update info panel
+        infoDiv.innerHTML = 
+          `<b>Position:</b> ${lat.toFixed(6)}, ${lng.toFixed(6)}<br>` +
+          `<b>Speed Limit:</b> ${currentSpeed} km/h<br>` +
+          `<b>Status:</b> ${inSchoolZone ? '<span style="color:red;">In School Zone</span>' : 'Normal Area'}<br>` +
+          `<b>Distance to school:</b> ${Math.round(distToSchool)} meters`;
+
+        carMarker.setLatLng(newPos);
+        map.panTo(newPos);
+
+        if (moveFraction === 1) {
+          idx++;
+        }
+
+        // Slower update interval if in school zone (simulate slower speed)
+        var delay = inSchoolZone ? 300 : 80; // milliseconds
+
+        setTimeout(animateStep, delay);
       }
-      nextStep();
+
+      animateStep();
     }
+
   </script>
 </body>
 </html>
