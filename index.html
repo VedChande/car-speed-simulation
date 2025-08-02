@@ -2,26 +2,27 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Leaflet: Two Cars – Accurate School Zone Logic, Custom Icons</title>
+  <title>Leaflet Two Cars – Proper School Zone Speed & Independent Animation</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+
   <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
   <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.css" />
+
   <style>
-    html, body { height: 100%; margin: 0; padding: 0; }
+    html, body { height: 100%; margin:0; padding:0; }
     #map { height: 100vh; width: 100vw; }
     #info {
       position: absolute; top: 10px; left: 10px; z-index: 1100;
       background: white; padding: 12px 16px; border-radius: 8px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.25);
-      font-family: Arial, sans-serif; font-size: 15px; max-width: 390px;
-      user-select: none;
+      box-shadow: 0 0 10px rgba(0,0,0,0.25); font-family: Arial, sans-serif;
+      font-size: 15px; max-width: 390px; user-select: none;
     }
     #controls {
       position: absolute; top: 10px; right: 10px; z-index: 1100;
       background: white; padding: 8px 12px; border-radius: 8px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.3);
-      font-family: Arial, sans-serif; user-select: none;
+      box-shadow: 0 0 10px rgba(0,0,0,0.3); font-family: Arial, sans-serif;
+      user-select: none;
     }
     button {
       font-size: 14px; margin: 5px; padding: 8px 16px; cursor: pointer;
@@ -38,213 +39,262 @@
   </style>
 </head>
 <body>
+
 <div id="map"></div>
-<div id="info">Waiting for route and start.</div>
+<div id="info">Waiting for routes to load and start...</div>
 <div id="controls">
   <button id="startBtn" disabled>Start Animation</button>
   <button id="stopBtn" disabled>Stop Animation</button>
   <button id="resetBtn" disabled>Reset Animation</button>
 </div>
+
 <div class="legend-box">
   <div class="legend-item"><div class="legend-line" style="border-color: orange;"></div> Highway</div>
   <div class="legend-item"><div class="legend-line" style="border-color: #4361ee;"></div> Normal Street</div>
 </div>
+
+<!-- Leaflet and Routing Machine scripts -->
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.js"></script>
-<script>
-  var map = L.map("map").setView([19.063, 72.846], 15);
 
-  // OSM
+<script>
+  // Initialize map centered near your area
+  const map = L.map("map").setView([19.063, 72.846], 15);
+
+  // OpenStreetMap tiles
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    maxZoom: 19, attribution: "&copy; OpenStreetMap contributors"
+    maxZoom: 19,
+    attribution: "&copy; OpenStreetMap contributors",
   }).addTo(map);
 
-  var schoolLatLng = [19.063607719563397, 72.8462002686538];
+  // School zone circle
+  const schoolLatLng = [19.063607719563397, 72.8462002686538];
   L.circleMarker(schoolLatLng, {
-    radius: 10, color: "red", fillColor: "#f88", fillOpacity: 0.9
+    radius: 10,
+    color: "red",
+    fillColor: "#f88",
+    fillOpacity: 0.9
   }).addTo(map).bindPopup("School");
 
-  var infoDiv = document.getElementById("info");
-  var startBtn = document.getElementById("startBtn");
-  var stopBtn = document.getElementById("stopBtn");
-  var resetBtn = document.getElementById("resetBtn");
+  // UI elements
+  const infoDiv = document.getElementById("info");
+  const startBtn = document.getElementById("startBtn");
+  const stopBtn = document.getElementById("stopBtn");
+  const resetBtn = document.getElementById("resetBtn");
 
-  var carIcon1 = L.icon({
+  // Car icons
+  const carIcon1 = L.icon({
     iconUrl: "https://github.com/VedChande/car-speed-simulation/blob/main/pngwing.com.png?raw=true",
-    iconSize: [40, 30], iconAnchor: [20, 15]
+    iconSize: [40, 30],
+    iconAnchor: [20, 15]
   });
-  var carIcon2 = L.icon({
+
+  const carIcon2 = L.icon({
     iconUrl: "https://github.com/VedChande/car-speed-simulation/blob/main/mater.png?raw=true",
-    iconSize: [44, 36], iconAnchor: [22, 18]
+    iconSize: [44, 36],
+    iconAnchor: [22, 18]
   });
 
-  var routeMain = [], routeHighway = [];
-  var readyMain = false, readyHighway = false;
-  var routeCtl1 = L.Routing.control({
-    waypoints: [
-      L.latLng(19.06098409033655, 72.84450074043295),
-      L.latLng(19.066607637929415, 72.84632342144964)
-    ],
-    createMarker: () => null, addWaypoints: false,
-    routeWhileDragging: false, showAlternatives: false,
-    fitSelectedRoutes: false, show: false
-  }).addTo(map);
-  var routeCtl2 = L.Routing.control({
-    waypoints: [
-      L.latLng(19.059980216915807, 72.84635018496782),
-      L.latLng(19.065952339636457, 72.84652130560008)
-    ],
-    createMarker: () => null, addWaypoints: false,
-    routeWhileDragging: false, showAlternatives: false,
-    fitSelectedRoutes: false, show: false
-  }).addTo(map);
-
-  routeCtl1.on("routesfound", function(e){
-    routeMain = e.routes[0].coordinates;
-    readyMain = true; updateButtons();
-  });
-  routeCtl2.on("routesfound", function(e){
-    routeHighway = e.routes[0].coordinates;
-    readyHighway = true; updateButtons();
-  });
-
-  routeCtl1.on("routingerror", function(){ infoDiv.innerHTML="Routing error: main route"; });
-  routeCtl2.on("routingerror", function(){ infoDiv.innerHTML="Routing error: highway route"; });
-
-  // Draw all roads from lines.geojson, style highways orange, others blue
-  fetch('lines.geojson').then(r=>r.json()).then(function(geo){
-    L.geoJSON(geo, {
-      style: function(f) {
-        var typ = (f.properties && f.properties.highway) || '';
-        return (typ === 'motorway' || typ === 'trunk' || typ === 'primary' || typ === 'motorway_link') ?
-          {color:'orange', weight:5, opacity:0.85} :
-          {color:'#4361ee', weight:2.2, opacity:0.7};
+  // Load and style roads from lines.geojson
+  fetch('lines.geojson').then(r => r.json()).then(function(geojson) {
+    L.geoJSON(geojson, {
+      style: function(feature) {
+        var hwy = (feature.properties && feature.properties.highway) || '';
+        if (['motorway', 'trunk', 'primary', 'motorway_link', 'trunk_link'].includes(hwy)) {
+          return { color: 'orange', weight: 5, opacity: 0.85 };
+        }
+        return { color: '#4361ee', weight: 2.2, opacity: 0.7 };
       }
     }).addTo(map);
   });
 
-  var car1 = null, car2 = null, idx1=0, idx2=0;
-  let animationRunning = false;
-  let animationTimeout = null;
+  // Define routing controls for main car & highway car
+  let routeMain = [], routeHighway = [];
+  let readyMain = false, readyHighway = false;
+  const routeCtl1 = L.Routing.control({
+    waypoints: [
+      L.latLng(19.06098409033655, 72.84450074043295),
+      L.latLng(19.066607637929415, 72.84632342144964)
+    ],
+    createMarker: () => null,
+    addWaypoints: false,
+    routeWhileDragging: false,
+    showAlternatives: false,
+    fitSelectedRoutes: false,
+    show: false
+  }).addTo(map);
 
-  function updateButtons(){
+  const routeCtl2 = L.Routing.control({
+    waypoints: [
+      L.latLng(19.059980216915807, 72.84635018496782),
+      L.latLng(19.065952339636457, 72.84652130560008)
+    ],
+    createMarker: () => null,
+    addWaypoints: false,
+    routeWhileDragging: false,
+    showAlternatives: false,
+    fitSelectedRoutes: false,
+    show: false
+  }).addTo(map);
+
+  routeCtl1.on("routesfound", function(e) {
+    routeMain = e.routes[0].coordinates;
+    readyMain = true;
+    updateButtons();
+  });
+  routeCtl2.on("routesfound", function(e) {
+    routeHighway = e.routes[0].coordinates;
+    readyHighway = true;
+    updateButtons();
+  });
+
+  routeCtl1.on("routingerror", () => infoDiv.innerHTML = "Error loading main route.");
+  routeCtl2.on("routingerror", () => infoDiv.innerHTML = "Error loading highway route.");
+
+  // Animation variables
+  let car1 = null, car2 = null;
+  let idx1 = 0, idx2 = 0;
+  let running1 = false, running2 = false;
+  let timeout1 = null, timeout2 = null;
+
+  // Speed & animation step constants
+  const SPEED_NORMAL = 50;    // km/h for first car outside school
+  const SPEED_SCHOOL = 10;    // km/h for first car inside school
+  const HIGHWAY_SPEED = 100;  // km/h for highway car (always)
+  const STEP_DIST = 4;        // meters per animation step
+
+  // Update UI buttons enabling/disabling
+  function updateButtons() {
     const ready = readyMain && readyHighway;
-    startBtn.disabled = !ready || animationRunning;
-    stopBtn.disabled = !animationRunning;
+    startBtn.disabled = !ready || running1 || running2;
+    stopBtn.disabled = !(running1 || running2);
     resetBtn.disabled = !ready;
-    if(ready && !animationRunning) {
+    if (ready && !running1 && !running2) {
       infoDiv.innerHTML = "Routes ready. Click Start.";
     }
   }
 
-  startBtn.onclick = function(){
-    if(animationRunning) return;
-    animationRunning = true;
-    idx1=0; idx2=0;
-    if(car1) map.removeLayer(car1);
-    if(car2) map.removeLayer(car2);
-    car1 = L.marker(routeMain[0], {icon: carIcon1}).addTo(map);
-    car2 = L.marker(routeHighway[0], {icon: carIcon2}).addTo(map);
+  // Start Animation
+  startBtn.onclick = () => {
+    if (running1 || running2) return;
+    idx1 = 0; idx2 = 0;
+    if (car1) map.removeLayer(car1);
+    if (car2) map.removeLayer(car2);
+    car1 = L.marker(routeMain[0], { icon: carIcon1 }).addTo(map);
+    car2 = L.marker(routeHighway[0], { icon: carIcon2 }).addTo(map);
     map.panTo(routeMain[0]);
+    running1 = running2 = true;
     updateButtons();
-    animateCars();
+    infoDiv.innerHTML = '';
+    animateCar1();
+    animateCar2();
   };
 
-  stopBtn.onclick = function(){
-    if(!animationRunning) return;
-    animationRunning = false;
-    if(animationTimeout) clearTimeout(animationTimeout);
-    animationTimeout = null;
+  // Stop Animation
+  stopBtn.onclick = () => {
+    if (!running1 && !running2) return;
+    running1 = running2 = false;
+    if(timeout1) clearTimeout(timeout1);
+    if(timeout2) clearTimeout(timeout2);
     updateButtons();
     infoDiv.innerHTML += "<br><b>Animation stopped.</b>";
   };
 
-  resetBtn.onclick = function(){
-    if(animationRunning){
-      animationRunning = false;
-      if(animationTimeout) clearTimeout(animationTimeout);
-      animationTimeout = null;
-    }
-    if(car1){
-      car1.setLatLng(routeMain[0]);
-      map.panTo(routeMain[0]);
-    }
-    if(car2){
-      car2.setLatLng(routeHighway[0]);
-    }
+  // Reset Animation
+  resetBtn.onclick = () => {
+    running1 = running2 = false;
+    if(timeout1) clearTimeout(timeout1);
+    if(timeout2) clearTimeout(timeout2);
+    if (car1) car1.setLatLng(routeMain[0]);
+    if (car2) car2.setLatLng(routeHighway[0]);
+    map.panTo(routeMain[0]);
     idx1 = 0; idx2 = 0;
     updateButtons();
     infoDiv.innerHTML = "Animation reset. Click Start to run again.";
   };
 
-  const SPEED_NORMAL = 50;   // km/h (first car)
-  const SPEED_SCHOOL = 10;   // km/h (first car, in school zone)
-  const HIGHWAY_SPEED = 100; // km/h (second car, always)
-  const STEP_DIST = 4;
+  // Animate first car (affected by school zone)
+  function animateCar1() {
+    if (!running1) return;
+    if (idx1 >= routeMain.length - 1) {
+      running1 = false;
+      checkBothFinished();
+      return;
+    }
+    const pos = car1.getLatLng(),
+      next = routeMain[idx1 + 1];
+    const nextLL = L.latLng(next.lat, next.lng);
+    const segD = pos.distanceTo(nextLL);
+    const frac = Math.min(STEP_DIST / segD, 1);
+    const newLat = pos.lat + (nextLL.lat - pos.lat) * frac;
+    const newLng = pos.lng + (nextLL.lng - pos.lng) * frac;
+    const newPos = L.latLng(newLat, newLng);
+    const distToSch = newPos.distanceTo(L.latLng(schoolLatLng[0], schoolLatLng[1]));
+    const inSch = distToSch < 100;
+    const spd = inSch ? SPEED_SCHOOL : SPEED_NORMAL;
+    car1.setLatLng(newPos);
+    if (frac === 1) idx1++;
+    displayInfo();
+    timeout1 = setTimeout(animateCar1, inSch ? 300 : 80);
+  }
 
-  function animateCars(){
-    if(!animationRunning) return;
+  // Animate second car (always full speed)
+  function animateCar2() {
+    if (!running2) return;
+    if (idx2 >= routeHighway.length - 1) {
+      running2 = false;
+      checkBothFinished();
+      return;
+    }
+    const pos = car2.getLatLng(),
+      next = routeHighway[idx2 + 1];
+    const nextLL = L.latLng(next.lat, next.lng);
+    const segD = pos.distanceTo(nextLL);
+    const frac = Math.min(STEP_DIST / segD, 1);
+    const newLat = pos.lat + (nextLL.lat - pos.lat) * frac;
+    const newLng = pos.lng + (nextLL.lng - pos.lng) * frac;
+    const newPos = L.latLng(newLat, newLng);
+    car2.setLatLng(newPos);
+    if (frac === 1) idx2++;
+    displayInfo();
+    timeout2 = setTimeout(animateCar2, 80);
+  }
 
-    let needNextFrame = false;
-    let delay1 = 80; // default first car
-    let delay2 = 80; // second car: always fast
-
-    // Car 1 (school-affected)
-    if (idx1 < routeMain.length - 1) {
-      let pos = car1.getLatLng();
-      let next = routeMain[idx1 + 1];
-      let nextLL = L.latLng(next.lat, next.lng);
-      let segD = pos.distanceTo(nextLL);
-      let frac = Math.min(STEP_DIST / segD, 1);
-      let newLat = pos.lat + (nextLL.lat - pos.lat) * frac;
-      let newLng = pos.lng + (nextLL.lng - pos.lng) * frac;
-      let newPos = L.latLng(newLat, newLng);
-
-      let distToSch = newPos.distanceTo(L.latLng(schoolLatLng[0], schoolLatLng[1]));
-      let inSch = distToSch < 100;
-      let spd = inSch ? SPEED_SCHOOL : SPEED_NORMAL;
-      car1.setLatLng(newPos);
-      if (frac === 1) idx1++;
-      delay1 = inSch ? 300 : 80;
-      infoDiv.innerHTML =
-        `<span style="font-weight:bold;color:#d00">Your Car</span><br>` +
-        `<b>Pos:</b> ${newLat.toFixed(6)}, ${newLng.toFixed(6)}<br>` +
+  // Update info panel showing both cars status
+  function displayInfo() {
+    let html = '';
+    if(car1) {
+      const cpos = car1.getLatLng();
+      const distToSch = cpos.distanceTo(L.latLng(schoolLatLng[0], schoolLatLng[1]));
+      const inSch = distToSch < 100;
+      const spd = inSch ? SPEED_SCHOOL : SPEED_NORMAL;
+      html += `<span style="font-weight:bold;color:#d00">Your Car</span><br>` +
+        `<b>Pos:</b> ${cpos.lat.toFixed(6)}, ${cpos.lng.toFixed(6)}<br>` +
         `<b>Speed:</b> ${spd} km/h<br>` +
         `<b>Status:</b> ${inSch ? '<span style="color:red">In School Zone</span>' : 'Normal'}<br>` +
         `<b>Distance to school:</b> ${Math.round(distToSch)} m<br><hr>`;
-      needNextFrame = true;
     }
-    // Car 2 (highway, always full speed)
-    if (idx2 < routeHighway.length - 1) {
-      let pos = car2.getLatLng();
-      let next = routeHighway[idx2 + 1];
-      let nextLL = L.latLng(next.lat, next.lng);
-      let segD = pos.distanceTo(nextLL);
-      let frac = Math.min(STEP_DIST / segD, 1);
-      let newLat = pos.lat + (nextLL.lat - pos.lat) * frac;
-      let newLng = pos.lng + (nextLL.lng - pos.lng) * frac;
-      let newPos = L.latLng(newLat, newLng);
-      car2.setLatLng(newPos);
-      if (frac === 1) idx2++;
-      infoDiv.innerHTML +=
-        `<span style="color:#060;font-weight:bold">Highway Car</span><br>` +
-        `<b>Pos:</b> ${newLat.toFixed(6)}, ${newLng.toFixed(6)}<br>` +
+    if(car2) {
+      const cpos2 = car2.getLatLng();
+      html += `<span style="color:#060;font-weight:bold">Highway Car</span><br>` +
+        `<b>Pos:</b> ${cpos2.lat.toFixed(6)}, ${cpos2.lng.toFixed(6)}<br>` +
         `<b>Speed:</b> ${HIGHWAY_SPEED} km/h<br>` +
         `<b>Status:</b> Unaffected by school<br><hr>`;
-      needNextFrame = true;
     }
+    infoDiv.innerHTML = html;
+  }
 
-    // Only car1's state controls its own delay; highway car always fast
-    if (needNextFrame) {
-      animationTimeout = setTimeout(animateCars, Math.min(delay1, delay2));
-    } else {
+  // Check if both animations finished
+  function checkBothFinished() {
+    if (!running1 && !running2) {
       infoDiv.innerHTML += "<b>BOTH routes completed.</b>";
-      animationRunning = false;
       updateButtons();
     }
   }
 
+  // Initialize button states until routes load
   updateButtons();
 </script>
+
 </body>
 </html>
