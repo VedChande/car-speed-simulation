@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Leaflet: Highway vs. Street Simulation</title>
+  <title>Leaflet: Two Cars, Highway/Street, Accurate School Zone Logic</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
@@ -11,51 +11,27 @@
     html, body { height: 100%; margin: 0; padding: 0; }
     #map { height: 100vh; width: 100vw; }
     #info {
-      position: absolute;
-      top: 10px; left: 10px;
-      z-index: 1100;
-      background: white;
-      padding: 12px 16px;
-      border-radius: 8px;
+      position: absolute; top: 10px; left: 10px; z-index: 1100;
+      background: white; padding: 12px 16px; border-radius: 8px;
       box-shadow: 0 0 10px rgba(0,0,0,0.25);
-      font-family: Arial, sans-serif;
-      font-size: 15px;
-      max-width: 390px;
+      font-family: Arial, sans-serif; font-size: 15px; max-width: 390px;
       user-select: none;
     }
     #controls {
-      position: absolute;
-      top: 10px; right: 10px;
-      z-index: 1100;
-      background: white;
-      padding: 8px 12px;
-      border-radius: 8px;
+      position: absolute; top: 10px; right: 10px; z-index: 1100;
+      background: white; padding: 8px 12px; border-radius: 8px;
       box-shadow: 0 0 10px rgba(0,0,0,0.3);
-      font-family: Arial, sans-serif;
-      user-select: none;
+      font-family: Arial, sans-serif; user-select: none;
     }
     button {
-      font-size: 14px;
-      margin: 5px;
-      padding: 8px 16px;
-      cursor: pointer;
-      border: 1px solid #999;
-      border-radius: 5px;
-      background: #eee;
+      font-size: 14px; margin: 5px; padding: 8px 16px; cursor: pointer;
+      border: 1px solid #999; border-radius: 5px; background: #eee;
     }
-    button:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
     .legend-box {
-      position: absolute;
-      bottom: 10px; left: 10px;
-      z-index: 1200;
-      background: white;
-      padding: 8px 12px;
-      border-radius: 8px;
-      box-shadow: 0 0 8px rgba(0,0,0,0.18);
-      font-size: 13px;
+      position: absolute; bottom: 10px; left: 10px; z-index: 1200;
+      background: white; padding: 8px 12px; border-radius: 8px;
+      box-shadow: 0 0 8px rgba(0,0,0,0.18); font-size: 13px;
     }
     .legend-item { display: flex; align-items: center; margin-bottom: 5px;}
     .legend-line { width: 30px; height: 0; border-width: 3.5px; border-style: solid; margin-right: 8px;}
@@ -82,7 +58,7 @@
     attribution: "&copy; OpenStreetMap contributors"
   }).addTo(map);
 
-  // SCHOOL marker
+  // School marker
   var schoolLatLng = [19.063607719563397, 72.8462002686538];
   L.circleMarker(schoolLatLng, {
     radius: 10, color: "red", fillColor: "#f88", fillOpacity: 0.9
@@ -174,9 +150,14 @@
   const HIGHWAY_SPEED = 100;  // Highway car always at this speed
   const STEP_DIST = 4;
 
+  // Updated: each car's delay managed separately, highway car never slows down
   function animateCars() {
+    let needNextFrame = false;
+    let delay1 = 80; // Main car delay (may be 300ms in school)
+    let delay2 = 80; // Highway car delay (fixed, never changes)
+
     // === Car 1: school-affected ===
-    if(idx1 < routeMain.length-1) {
+    if (idx1 < routeMain.length-1) {
       let pos = car1.getLatLng(), next = routeMain[idx1+1];
       let nextLL = L.latLng(next.lat, next.lng);
       let segD = pos.distanceTo(nextLL);
@@ -188,15 +169,17 @@
       let inSch = distToSch<100, spd = inSch?SPEED_SCHOOL:SPEED_NORMAL;
       car1.setLatLng(newPos);
       if(frac===1) idx1++;
+      delay1 = inSch ? 300 : 80;
       infoDiv.innerHTML =
         `<span style="font-weight:bold;color:#d00">Your Car</span><br>` +
         `<b>Pos:</b> ${newLat.toFixed(6)}, ${newLng.toFixed(6)}<br>` +
         `<b>Speed:</b> ${spd} km/h<br>` +
         `<b>Status:</b> ${inSch?'<span style="color:red">In School Zone</span>':'Normal'}<br>` +
         `<b>Distance to school:</b> ${Math.round(distToSch)} m<br><hr>`;
+      needNextFrame = true;
     }
     // === Car 2: highway car ===
-    if(idx2 < routeHighway.length-1){
+    if (idx2 < routeHighway.length-1){
       let pos = car2.getLatLng(), next = routeHighway[idx2+1];
       let nextLL = L.latLng(next.lat, next.lng);
       let segD = pos.distanceTo(nextLL);
@@ -211,11 +194,12 @@
         `<b>Pos:</b> ${newLat.toFixed(6)}, ${newLng.toFixed(6)}<br>` +
         `<b>Speed:</b> ${HIGHWAY_SPEED} km/h<br>` +
         `<b>Status:</b> Unaffected by school<br><hr>`;
+      needNextFrame = true;
     }
-    // Keep animating until both are done
-    if(idx1 < routeMain.length-1 || idx2 < routeHighway.length-1)
-      setTimeout(animateCars,  (idx1 < routeMain.length-1 && routeMain[idx1] && (car1.getLatLng().distanceTo(L.latLng(schoolLatLng[0],schoolLatLng[1]))<100)) ? 300:80 );
-    else {
+    // Schedule next frame for whichever car needs it, with the *minimum* delay (so highway car never slows down)
+    if (needNextFrame) {
+      setTimeout(animateCars, Math.min(delay1, delay2));
+    } else {
       infoDiv.innerHTML += "<b>BOTH routes completed.</b>";
       running = false;
       startBtn.disabled = false;
