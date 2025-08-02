@@ -4,11 +4,8 @@
   <meta charset="UTF-8" />
   <title>Leaflet Two Cars – ESP8266 Motor Control Integration</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-
-  <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
   <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.css" />
-
   <style>
     html, body { height: 100%; margin:0; padding:0; }
     #map { height: 100vh; width: 100vw; }
@@ -16,14 +13,12 @@
       position: absolute; top: 10px; left: 10px; z-index: 1100;
       background: white; padding: 12px 16px; border-radius: 8px;
       box-shadow: 0 0 10px rgba(0,0,0,0.25); font-family: Arial, sans-serif;
-      font-size: 15px; max-width: 390px; user-select: none;
-      max-height: 300px; overflow-y: auto;
+      font-size: 15px; max-width: 390px; user-select: none; max-height: 300px; overflow-y: auto;
     }
     #controls {
       position: absolute; top: 10px; right: 10px; z-index: 1100;
       background: white; padding: 8px 12px; border-radius: 8px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.3); font-family: Arial, sans-serif;
-      user-select: none;
+      box-shadow: 0 0 10px rgba(0,0,0,0.3); font-family: Arial, sans-serif; user-select: none;
     }
     button {
       font-size: 14px; margin: 5px; padding: 8px 16px; cursor: pointer;
@@ -48,7 +43,6 @@
   <button id="stopBtn" disabled>Stop Animation</button>
   <button id="resetBtn" disabled>Reset Animation</button>
 </div>
-
 <div class="legend-box">
   <div class="legend-item"><div class="legend-line" style="border-color: orange;"></div> Highway</div>
   <div class="legend-item"><div class="legend-line" style="border-color: #4361ee;"></div> Normal Street</div>
@@ -56,50 +50,39 @@
 
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.js"></script>
-
 <script>
-  // *** SET YOUR ESP8266 LOCAL IP HERE ***
+  // === MATCH THIS TO YOUR ESP8266 IP ===
   const ESP_IP = "172.18.186.167";
 
-  // Helper: Map kmph speed to ESP8266 PWM (0-1023)
+  // Map kmph speed to ESP8266 PWM (0-1023)
   function kmphToPWM(kmph) {
-    let pwm = Math.round((kmph / 100) * 1023);
+    let pwm = Math.round((kmph / 100) * 1023); // 100kmph becomes 1023
     return Math.min(Math.max(pwm, 0), 1023);
   }
 
-  // Track last PWM sent per motor to avoid redundant requests
+  // Track last PWM sent to each motor
   let lastPWM1 = null;
   let lastPWM2 = null;
 
-  // Send motor speed to ESP via HTTP fetch GET request
   function sendMotorSpeed(motorNum, pwmValue, direction = 0) {
-    if ((motorNum === 1 && pwmValue === lastPWM1) || (motorNum === 2 && pwmValue === lastPWM2)) {
-      return; // no change, skip request
-    }
+    let last = (motorNum === 1 ? lastPWM1 : lastPWM2);
+    if (pwmValue === last) return; // skip duplicate
     if (motorNum === 1) lastPWM1 = pwmValue;
     if (motorNum === 2) lastPWM2 = pwmValue;
-
     fetch(`http://${ESP_IP}/motor${motorNum}?speed=${pwmValue}&dir=${direction}`)
-      .then(r => r.text())
-      .then(text => console.log(`Motor ${motorNum} PWM=${pwmValue} response:`, text))
-      .catch(err => console.warn(`Motor ${motorNum} request failed:`, err));
+      .then(r => r.text()).then(txt => console.log(`Motor${motorNum}: ${pwmValue} =>`, txt))
+      .catch(err => console.warn(`Motor${motorNum} request failed:`, err));
   }
 
-  // Leaflet code & simulation below -------------------------------------
-
+  // ================== MAP / SIM
   const map = L.map("map").setView([19.063, 72.846], 15);
-
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    maxZoom: 19,
-    attribution: "&copy; OpenStreetMap contributors",
+    maxZoom: 19, attribution: "&copy; OpenStreetMap contributors"
   }).addTo(map);
 
   const schoolLatLng = [19.063607719563397, 72.8462002686538];
   L.circleMarker(schoolLatLng, {
-    radius: 10,
-    color: "red",
-    fillColor: "#f88",
-    fillOpacity: 0.9
+    radius: 10, color: "red", fillColor: "#f88", fillOpacity: 0.9
   }).addTo(map).bindPopup("School");
 
   const infoDiv = document.getElementById("info");
@@ -109,13 +92,11 @@
 
   const carIcon1 = L.icon({
     iconUrl: "https://github.com/VedChande/car-speed-simulation/blob/main/pngwing.com.png?raw=true",
-    iconSize: [40, 30],
-    iconAnchor: [20, 15]
+    iconSize: [40, 30], iconAnchor: [20, 15]
   });
   const carIcon2 = L.icon({
     iconUrl: "https://github.com/VedChande/car-speed-simulation/blob/main/mater.png?raw=true",
-    iconSize: [44, 36],
-    iconAnchor: [22, 18]
+    iconSize: [44, 36], iconAnchor: [22, 18]
   });
 
   let routeMain = [], routeHighway = [];
@@ -133,7 +114,6 @@
     fitSelectedRoutes: false,
     show: false
   }).addTo(map);
-
   const routeCtl2 = L.Routing.control({
     waypoints: [
       L.latLng(19.059980216915807, 72.84635018496782),
@@ -149,27 +129,36 @@
 
   routeCtl1.on("routesfound", function(e) {
     routeMain = e.routes[0].coordinates;
-    readyMain = true;
-    updateButtons();
+    readyMain = true; updateButtons();
   });
   routeCtl2.on("routesfound", function(e) {
     routeHighway = e.routes[0].coordinates;
-    readyHighway = true;
-    updateButtons();
+    readyHighway = true; updateButtons();
   });
-
   routeCtl1.on("routingerror", () => infoDiv.innerHTML = "Error loading main route.");
   routeCtl2.on("routingerror", () => infoDiv.innerHTML = "Error loading highway route.");
 
-  let car1 = null, car2 = null;
-  let idx1 = 0, idx2 = 0;
+  // Optional: display lines.geojson
+  fetch('lines.geojson').then(r => r.json()).then(function(geojson) {
+    L.geoJSON(geojson, {
+      style: function(f) {
+        var hwy = (f.properties && f.properties.highway) || '';
+        if (['motorway', 'trunk', 'primary', 'motorway_link', 'trunk_link'].includes(hwy)) {
+          return { color: 'orange', weight: 5, opacity: 0.85 };
+        }
+        return { color: '#4361ee', weight: 2.2, opacity: 0.7 };
+      }
+    }).addTo(map);
+  });
+
+  let car1 = null, car2 = null, idx1 = 0, idx2 = 0;
   let running1 = false, running2 = false;
   let timeout1 = null, timeout2 = null;
 
-  const SPEED_NORMAL = 50;    // km/h for main car outside school zone
-  const SPEED_SCHOOL = 10;    // km/h for main car inside school zone
-  const HIGHWAY_SPEED = 100;  // km/h for highway car (always full speed)
-  const STEP_DIST = 4;        // meters per animation step
+  const SPEED_NORMAL = 50;    // km/h for main car
+  const SPEED_SCHOOL = 10;    // km/h for main car inside school
+  const HIGHWAY_SPEED = 100;  // km/h for highway car
+  const STEP_DIST = 4;        // meters per animation frame
 
   function updateButtons() {
     const ready = readyMain && readyHighway;
@@ -183,14 +172,9 @@
 
   startBtn.onclick = () => {
     if (running1 || running2) return;
-    idx1 = 0;
-    idx2 = 0;
-    lastPWM1 = null;
-    lastPWM2 = null;
-
+    idx1 = 0; idx2 = 0; lastPWM1 = lastPWM2 = null;
     if (car1) map.removeLayer(car1);
     if (car2) map.removeLayer(car2);
-
     car1 = L.marker(routeMain[0], { icon: carIcon1 }).addTo(map);
     car2 = L.marker(routeHighway[0], { icon: carIcon2 }).addTo(map);
     map.panTo(routeMain[0]);
@@ -208,7 +192,6 @@
     if (timeout2) clearTimeout(timeout2);
     updateButtons();
     infoDiv.innerHTML += "<br><b>Animation stopped.</b>";
-    // Stop motors by sending speed 0
     sendMotorSpeed(1, 0);
     sendMotorSpeed(2, 0);
   };
@@ -221,15 +204,14 @@
     if (car2) car2.setLatLng(routeHighway[0]);
     map.panTo(routeMain[0]);
     idx1 = 0; idx2 = 0;
-    lastPWM1 = null;
-    lastPWM2 = null;
+    lastPWM1 = null; lastPWM2 = null;
     updateButtons();
     infoDiv.innerHTML = "Animation reset. Click Start to run again.";
-    // Set motors stop
     sendMotorSpeed(1, 0);
     sendMotorSpeed(2, 0);
   };
 
+  // --- Main car (school affected)
   function animateCar1() {
     if (!running1) return;
     if (idx1 >= routeMain.length - 1) {
@@ -238,28 +220,21 @@
       sendMotorSpeed(1, 0); // stop motor 1
       return;
     }
-    const pos = car1.getLatLng(),
-      next = routeMain[idx1 + 1];
+    const pos = car1.getLatLng(), next = routeMain[idx1 + 1];
     const nextLL = L.latLng(next.lat, next.lng);
-    const segD = pos.distanceTo(nextLL);
-    const frac = Math.min(STEP_DIST / segD, 1);
-    const newLat = pos.lat + (nextLL.lat - pos.lat) * frac;
-    const newLng = pos.lng + (nextLL.lng - pos.lng) * frac;
+    const segD = pos.distanceTo(nextLL), frac = Math.min(STEP_DIST / segD, 1);
+    const newLat = pos.lat + (nextLL.lat - pos.lat) * frac, newLng = pos.lng + (nextLL.lng - pos.lng) * frac;
     const newPos = L.latLng(newLat, newLng);
     const distToSch = newPos.distanceTo(L.latLng(schoolLatLng[0], schoolLatLng[1]));
-    const inSch = distToSch < 100;
-    const spd = inSch ? SPEED_SCHOOL : SPEED_NORMAL;
+    const inSch = distToSch < 100, spd = inSch ? SPEED_SCHOOL : SPEED_NORMAL;
     car1.setLatLng(newPos);
     if (frac === 1) idx1++;
-
-    // Send speed command to motor 1 only if changed
-    const pwmSpeed = kmphToPWM(spd);
-    sendMotorSpeed(1, pwmSpeed);
-
+    sendMotorSpeed(1, kmphToPWM(spd));
     displayInfo();
     timeout1 = setTimeout(animateCar1, inSch ? 300 : 80);
   }
 
+  // --- Highway car (always fast)
   function animateCar2() {
     if (!running2) return;
     if (idx2 >= routeHighway.length - 1) {
@@ -268,21 +243,14 @@
       sendMotorSpeed(2, 0); // stop motor 2
       return;
     }
-    const pos = car2.getLatLng(),
-      next = routeHighway[idx2 + 1];
+    const pos = car2.getLatLng(), next = routeHighway[idx2 + 1];
     const nextLL = L.latLng(next.lat, next.lng);
-    const segD = pos.distanceTo(nextLL);
-    const frac = Math.min(STEP_DIST / segD, 1);
-    const newLat = pos.lat + (nextLL.lat - pos.lat) * frac;
-    const newLng = pos.lng + (nextLL.lng - pos.lng) * frac;
+    const segD = pos.distanceTo(nextLL), frac = Math.min(STEP_DIST / segD, 1);
+    const newLat = pos.lat + (nextLL.lat - pos.lat) * frac, newLng = pos.lng + (nextLL.lng - pos.lng) * frac;
     const newPos = L.latLng(newLat, newLng);
     car2.setLatLng(newPos);
     if (frac === 1) idx2++;
-
-    // Send speed command to motor 2 (always full speed)
-    const pwmSpeed = kmphToPWM(HIGHWAY_SPEED);
-    sendMotorSpeed(2, pwmSpeed);
-
+    sendMotorSpeed(2, kmphToPWM(HIGHWAY_SPEED));
     displayInfo();
     timeout2 = setTimeout(animateCar2, 80);
   }
@@ -290,10 +258,8 @@
   function displayInfo() {
     let html = '';
     if(car1) {
-      const cpos = car1.getLatLng();
-      const distToSch = cpos.distanceTo(L.latLng(schoolLatLng[0], schoolLatLng[1]));
-      const inSch = distToSch < 100;
-      const spd = inSch ? SPEED_SCHOOL : SPEED_NORMAL;
+      const cpos = car1.getLatLng(), distToSch = cpos.distanceTo(L.latLng(schoolLatLng[0], schoolLatLng[1]));
+      const inSch = distToSch < 100, spd = inSch ? SPEED_SCHOOL : SPEED_NORMAL;
       html += `<span style="font-weight:bold;color:#d00">Your Car</span><br>` +
         `<b>Pos:</b> ${cpos.lat.toFixed(6)}, ${cpos.lng.toFixed(6)}<br>` +
         `<b>Speed:</b> ${spd} km/h<br>` +
@@ -314,9 +280,11 @@
     if (!running1 && !running2) {
       infoDiv.innerHTML += "<b>BOTH routes completed.</b>";
       updateButtons();
+      sendMotorSpeed(1, 0); sendMotorSpeed(2, 0);
     }
   }
+
+  updateButtons();
 </script>
 </body>
 </html>
-
